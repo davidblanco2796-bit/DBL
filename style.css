@@ -11,6 +11,8 @@
   --series-risers:        #2a78d6;
   --series-fitouts:       #1baf7a;
   --series-complications: #eda100;
+  --series-trunk:         #008300;
+  --series-branch:        #4a3aa7;
 
   --radius: 10px;
 }
@@ -29,6 +31,8 @@
     --series-risers:        #3987e5;
     --series-fitouts:       #199e70;
     --series-complications: #c98500;
+    --series-trunk:         #008300;
+    --series-branch:        #9085e9;
   }
 }
 
@@ -45,6 +49,8 @@
   --series-risers:        #3987e5;
   --series-fitouts:       #199e70;
   --series-complications: #c98500;
+  --series-trunk:         #008300;
+  --series-branch:        #9085e9;
 }
 
 :root[data-theme="light"] {
@@ -60,6 +66,8 @@
   --series-risers:        #2a78d6;
   --series-fitouts:       #1baf7a;
   --series-complications: #eda100;
+  --series-trunk:         #008300;
+  --series-branch:        #4a3aa7;
 }
 
 * { box-sizing: border-box; }
@@ -471,4 +479,162 @@ input[type="number"]:focus {
 .saved-item-actions .btn {
   padding: 6px 12px;
   font-size: 0.82rem;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.legend-sub {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.hint-tight {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+/* ---- Markup toolbar & pins ---- */
+
+.markup-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--gridline);
+  background: var(--page-plane);
+}
+
+.markup-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pin-chip {
+  font: inherit;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pin-chip::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--chip-color, var(--text-muted));
+  flex-shrink: 0;
+}
+
+.pin-chip[data-category="riser"] { --chip-color: var(--series-risers); }
+.pin-chip[data-category="trunk"] { --chip-color: var(--series-trunk); }
+.pin-chip[data-category="branch"] { --chip-color: var(--series-branch); }
+.pin-chip[data-category="complication"] { --chip-color: var(--series-complications); }
+
+.pin-chip[aria-pressed="true"] {
+  border-color: var(--chip-color);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--chip-color) 14%, var(--surface-1));
+  font-weight: 600;
+}
+
+.pdf-page-stage {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.pin-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.pin-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #ffffff;
+  border: 2px solid var(--surface-1);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  cursor: pointer;
+  background: var(--pin-color, var(--text-muted));
+}
+
+.pin-marker[data-category="riser"] { --pin-color: var(--series-risers); }
+.pin-marker[data-category="trunk"] { --pin-color: var(--series-trunk); }
+.pin-marker[data-category="branch"] { --pin-color: var(--series-branch); }
+.pin-marker[data-category="complication"] { --pin-color: var(--series-complications); }
+
+.pin-sync {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--page-plane);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+
+.pin-sync-days {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.pin-sync-days input {
+  width: 60px;
+  padding: 4px 6px;
+}
+
+.smacna-output {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.smacna-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.smacna-row .k {
+  color: var(--text-secondary);
+}
+
+.smacna-row .v {
+  font-weight: 600;
+  text-align: right;
 }

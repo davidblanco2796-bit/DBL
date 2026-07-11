@@ -41,16 +41,32 @@
         <button type="button" id="pdfZoomOut" class="btn btn-ghost" aria-label="Zoom out">&minus;</button>
         <button type="button" id="pdfZoomIn" class="btn btn-ghost" aria-label="Zoom in">&plus;</button>
       </div>
+
+      <div class="markup-toolbar">
+        <div class="markup-categories" role="radiogroup" aria-label="Pin category">
+          <button type="button" class="pin-chip" data-category="riser" aria-pressed="true">Riser</button>
+          <button type="button" class="pin-chip" data-category="trunk">Trunk</button>
+          <button type="button" class="pin-chip" data-category="branch">Branch</button>
+          <button type="button" class="pin-chip" data-category="complication">Complication</button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="clearPinsBtn">Clear pins (this page)</button>
+      </div>
+      <p class="hint hint-tight">Pick a category, then click on the drawing to drop a pin. Click a pin to remove it.</p>
+
       <div class="pdf-canvas-wrap">
-        <canvas id="pdfCanvas"></canvas>
+        <div class="pdf-page-stage" id="pdfPageStage">
+          <canvas id="pdfCanvas"></canvas>
+          <div class="pin-layer" id="pinLayer"></div>
+        </div>
       </div>
     </div>
 
     <p class="hint">
-      Automatic riser detection from plan sets isn't reliable, so counts still need
-      to come from you or your tech reading the drawing. Upload the PDF here for a
-      side-by-side reference — or send it to me directly in chat and I'll read off
-      the riser/fitout counts for you to plug in below.
+      Automatic riser/duct detection from plan sets isn't reliable on its own, so
+      pin placement still comes from you or your tech reading the drawing. Upload
+      the PDF here, pin what you're counting, then apply the tallies into the
+      estimator — or send the plan directly in chat and I'll read off counts for
+      you to place as pins.
     </p>
   </section>
 
@@ -70,10 +86,14 @@
           <input type="number" id="riserPace" min="0.1" step="0.1" value="3.5" inputmode="decimal" />
         </label>
       </div>
+      <div class="pin-sync" id="riserPinSync" hidden>
+        <span><span id="riserPinCount">0</span> riser pins on drawing</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="useRiserPinsBtn">Use count</button>
+      </div>
     </fieldset>
 
     <fieldset class="group">
-      <legend>Horizontal fitouts</legend>
+      <legend>Horizontal fitouts <span class="legend-sub">(trunk + branch)</span></legend>
       <div class="field-row">
         <label class="field">
           <span class="field-label">Count</span>
@@ -83,6 +103,10 @@
           <span class="field-label">Pace (per day)</span>
           <input type="number" id="fitoutPace" min="0.1" step="0.1" value="2" inputmode="decimal" />
         </label>
+      </div>
+      <div class="pin-sync" id="fitoutPinSync" hidden>
+        <span><span id="fitoutPinCount">0</span> trunk/branch pins on drawing</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="useFitoutPinsBtn">Use count</button>
       </div>
     </fieldset>
 
@@ -98,6 +122,38 @@
           <input type="text" id="complicationNote" placeholder="flat oval / lined duct, tough access, etc." />
         </label>
       </div>
+      <div class="pin-sync" id="complicationPinSync" hidden>
+        <span><span id="complicationPinCount">0</span> complication pins on drawing</span>
+        <label class="pin-sync-days">
+          <span>days each</span>
+          <input type="number" id="complicationDaysPerPin" min="0" step="0.25" value="0.5" inputmode="decimal" />
+        </label>
+        <button type="button" class="btn btn-ghost btn-sm" id="useComplicationPinsBtn">Use count</button>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>SMACNA reference <span class="legend-sub">(NY tri-state)</span></legend>
+      <label class="field">
+        <span class="field-label">System pressure class</span>
+        <select id="smacnaPressureClass">
+          <option value="0.5">1/2" w.g.</option>
+          <option value="1">1" w.g.</option>
+          <option value="2" selected>2" w.g.</option>
+          <option value="3">3" w.g.</option>
+          <option value="4">4" w.g.</option>
+          <option value="6">6" w.g.</option>
+          <option value="10">10" w.g.</option>
+        </select>
+      </label>
+      <div class="smacna-output" id="smacnaOutput"></div>
+      <p class="hint hint-tight">
+        Reference guidance from SMACNA HVAC Duct Construction Standards &amp; HVAC
+        Air Duct Leakage Test Manual. The engineer of record / project spec sets
+        the actual required seal and leakage class — many NY tri-state jurisdictions
+        reference SMACNA seal classes for medium/high-pressure duct via the adopted
+        mechanical &amp; energy code. Confirm before bidding.
+      </p>
     </fieldset>
 
     <fieldset class="group">

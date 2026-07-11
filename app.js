@@ -34,6 +34,21 @@
     pdfNext: document.getElementById("pdfNext"),
     pdfZoomIn: document.getElementById("pdfZoomIn"),
     pdfZoomOut: document.getElementById("pdfZoomOut"),
+    pdfPageStage: document.getElementById("pdfPageStage"),
+    pinLayer: document.getElementById("pinLayer"),
+    clearPinsBtn: document.getElementById("clearPinsBtn"),
+    riserPinSync: document.getElementById("riserPinSync"),
+    riserPinCount: document.getElementById("riserPinCount"),
+    useRiserPinsBtn: document.getElementById("useRiserPinsBtn"),
+    fitoutPinSync: document.getElementById("fitoutPinSync"),
+    fitoutPinCount: document.getElementById("fitoutPinCount"),
+    useFitoutPinsBtn: document.getElementById("useFitoutPinsBtn"),
+    complicationPinSync: document.getElementById("complicationPinSync"),
+    complicationPinCount: document.getElementById("complicationPinCount"),
+    complicationDaysPerPin: document.getElementById("complicationDaysPerPin"),
+    useComplicationPinsBtn: document.getElementById("useComplicationPinsBtn"),
+    smacnaPressureClass: document.getElementById("smacnaPressureClass"),
+    smacnaOutput: document.getElementById("smacnaOutput"),
   };
 
   const currency = new Intl.NumberFormat("en-US", {
@@ -43,6 +58,143 @@
   });
 
   const RATES = { standard: 3500, prevailing: 4500 };
+
+  // ---- SMACNA reference (HVAC Duct Construction Standards / Air Duct Leakage Test Manual) ----
+  // Guidance values, not code text — confirm against the governing project spec / AHJ.
+  const SMACNA_TABLE = {
+    "0.5": { sealClass: "None mandated", scope: "Sealing not required by SMACNA; Class C recommended for tight systems", targetCL: 30 },
+    "1":   { sealClass: "C", scope: "Transverse joints only", targetCL: 24 },
+    "2":   { sealClass: "C", scope: "Transverse joints only", targetCL: 12 },
+    "3":   { sealClass: "B", scope: "Transverse joints + longitudinal seams", targetCL: 6 },
+    "4":   { sealClass: "A", scope: "Transverse joints + longitudinal seams + duct wall penetrations", targetCL: 3 },
+    "6":   { sealClass: "A", scope: "Transverse joints + longitudinal seams + duct wall penetrations", targetCL: 3 },
+    "10":  { sealClass: "A", scope: "Transverse joints + longitudinal seams + duct wall penetrations", targetCL: 3 },
+  };
+
+  function renderSmacna() {
+    const pressure = Number(els.smacnaPressureClass.value);
+    const row = SMACNA_TABLE[els.smacnaPressureClass.value];
+    const leakageRate = row.targetCL * Math.pow(pressure, 0.65);
+    els.smacnaOutput.innerHTML = `
+      <div class="smacna-row"><span class="k">Required seal class</span><span class="v">${row.sealClass}</span></div>
+      <div class="smacna-row"><span class="k">Sealing scope</span><span class="v">${row.scope}</span></div>
+      <div class="smacna-row"><span class="k">Target leakage class (CL)</span><span class="v">${row.targetCL}</span></div>
+      <div class="smacna-row"><span class="k">Allowable leakage rate</span><span class="v">${leakageRate.toFixed(2)} cfm/100 ft² @ ${pressure}" wg</span></div>
+    `;
+  }
+
+  els.smacnaPressureClass.addEventListener("change", renderSmacna);
+
+  // ---- Pin markup ----
+  const CATEGORY_META = {
+    riser: { label: "Riser", code: "R", cssVar: "--series-risers" },
+    trunk: { label: "Trunk", code: "T", cssVar: "--series-trunk" },
+    branch: { label: "Branch", code: "B", cssVar: "--series-branch" },
+    complication: { label: "Complication", code: "C", cssVar: "--series-complications" },
+  };
+
+  let pinsByPage = {}; // { [pageNumber]: [{ id, category, xPct, yPct }] }
+  let activeCategory = "riser";
+  let lastPdfFileKey = null;
+
+  function allPins() {
+    return Object.values(pinsByPage).flat();
+  }
+
+  function pinTally() {
+    const tally = { riser: 0, trunk: 0, branch: 0, complication: 0 };
+    allPins().forEach((p) => { tally[p.category] += 1; });
+    return tally;
+  }
+
+  function renderPinSync() {
+    const tally = pinTally();
+    const anyPins = allPins().length > 0;
+
+    els.riserPinSync.hidden = tally.riser === 0;
+    els.riserPinCount.textContent = tally.riser;
+
+    const fitoutPins = tally.trunk + tally.branch;
+    els.fitoutPinSync.hidden = fitoutPins === 0;
+    els.fitoutPinCount.textContent = fitoutPins;
+
+    els.complicationPinSync.hidden = tally.complication === 0;
+    els.complicationPinCount.textContent = tally.complication;
+
+    return anyPins;
+  }
+
+  function renderPinsOnPage() {
+    els.pinLayer.innerHTML = "";
+    const pins = pinsByPage[pdfPage] || [];
+    const seen = { riser: 0, trunk: 0, branch: 0, complication: 0 };
+
+    pins.forEach((pin) => {
+      seen[pin.category] += 1;
+      const meta = CATEGORY_META[pin.category];
+      const marker = document.createElement("div");
+      marker.className = "pin-marker";
+      marker.dataset.category = pin.category;
+      marker.style.left = pin.xPct + "%";
+      marker.style.top = pin.yPct + "%";
+      marker.title = `${meta.label} ${seen[pin.category]} — click to remove`;
+      marker.textContent = meta.code + seen[pin.category];
+      marker.addEventListener("click", (e) => {
+        e.stopPropagation();
+        pinsByPage[pdfPage] = pinsByPage[pdfPage].filter((p) => p.id !== pin.id);
+        renderPinsOnPage();
+        renderPinSync();
+      });
+      els.pinLayer.appendChild(marker);
+    });
+
+    renderPinSync();
+  }
+
+  document.querySelectorAll(".pin-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      activeCategory = chip.dataset.category;
+      document.querySelectorAll(".pin-chip").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
+    });
+  });
+
+  els.pinLayer.addEventListener("click", (e) => {
+    if (!pdfDoc) return;
+    const rect = els.pdfPageStage.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    if (!pinsByPage[pdfPage]) pinsByPage[pdfPage] = [];
+    pinsByPage[pdfPage].push({
+      id: crypto.randomUUID(),
+      category: activeCategory,
+      xPct: Math.min(99, Math.max(1, xPct)),
+      yPct: Math.min(99, Math.max(1, yPct)),
+    });
+    renderPinsOnPage();
+  });
+
+  els.clearPinsBtn.addEventListener("click", () => {
+    pinsByPage[pdfPage] = [];
+    renderPinsOnPage();
+  });
+
+  els.useRiserPinsBtn.addEventListener("click", () => {
+    els.riserCount.value = pinTally().riser;
+    recalc();
+  });
+
+  els.useFitoutPinsBtn.addEventListener("click", () => {
+    const t = pinTally();
+    els.fitoutCount.value = t.trunk + t.branch;
+    recalc();
+  });
+
+  els.useComplicationPinsBtn.addEventListener("click", () => {
+    const count = pinTally().complication;
+    const perPin = Number(els.complicationDaysPerPin.value) || 0;
+    els.complicationDays.value = (count * perPin).toFixed(2).replace(/\.?0+$/, "") || "0";
+    recalc();
+  });
 
   function getDayRate() {
     const mode = document.querySelector('input[name="dayRate"]:checked').value;
@@ -246,6 +398,11 @@
     if (radio) radio.checked = true;
     els.customRateField.hidden = job.dayRateMode !== "custom";
     if (job.dayRateMode === "custom") els.customRateValue.value = job.dayRate;
+    if (job.smacnaPressureClass) els.smacnaPressureClass.value = job.smacnaPressureClass;
+    renderSmacna();
+    pinsByPage = job.pinsByPage ? JSON.parse(JSON.stringify(job.pinsByPage)) : {};
+    lastPdfFileKey = null;
+    renderPinsOnPage();
     recalc();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -258,7 +415,14 @@
       setTimeout(() => (els.saveStatus.textContent = ""), 2500);
       return;
     }
-    const job = { id: crypto.randomUUID(), savedAt: Date.now(), ...state, estimate };
+    const job = {
+      id: crypto.randomUUID(),
+      savedAt: Date.now(),
+      ...state,
+      estimate,
+      smacnaPressureClass: els.smacnaPressureClass.value,
+      pinsByPage,
+    };
     const jobs = loadJobs();
     jobs.push(job);
     persistJobs(jobs);
@@ -282,12 +446,19 @@
     canvas.height = viewport.height;
     await page.render({ canvasContext: ctx, viewport }).promise;
     els.pdfPageIndicator.textContent = `Page ${pdfPage} / ${pdfDoc.numPages}`;
+    renderPinsOnPage();
   }
 
   els.pdfInput.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     els.pdfFileName.textContent = file.name;
+
+    const fileKey = `${file.name}:${file.size}`;
+    if (lastPdfFileKey !== null && fileKey !== lastPdfFileKey) {
+      pinsByPage = {};
+    }
+    lastPdfFileKey = fileKey;
 
     const buf = await file.arrayBuffer();
     pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise;
@@ -321,4 +492,6 @@
   // ---- init ----
   recalc();
   renderSavedJobs();
+  renderSmacna();
+  renderPinSync();
 })();
