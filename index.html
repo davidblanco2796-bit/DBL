@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aeroseal Job Estimator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%232a78d6'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'%3EA%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="app-header">
+  <h1>Aeroseal Job Estimator</h1>
+  <p class="app-subtitle">Riser &amp; fitout counts in, crew days and price out.</p>
+</header>
+
+<main class="layout">
+
+  <!-- PLAN VIEWER -->
+  <section class="panel plan-panel" aria-labelledby="plan-heading">
+    <h2 id="plan-heading">Job Plan</h2>
+
+    <label class="field">
+      <span class="field-label">Job / building name</span>
+      <input type="text" id="jobName" placeholder="e.g. 1420 Maple Ave — Bldg C" />
+    </label>
+
+    <div class="upload-row">
+      <label class="btn btn-secondary file-btn">
+        Upload plan PDF
+        <input type="file" id="pdfInput" accept="application/pdf" hidden />
+      </label>
+      <span id="pdfFileName" class="file-name">No file selected</span>
+    </div>
+
+    <div id="pdfViewer" class="pdf-viewer" hidden>
+      <div class="pdf-controls">
+        <button type="button" id="pdfPrev" class="btn btn-ghost" aria-label="Previous page">&larr;</button>
+        <span id="pdfPageIndicator">Page 1 / 1</span>
+        <button type="button" id="pdfNext" class="btn btn-ghost" aria-label="Next page">&rarr;</button>
+        <span class="spacer"></span>
+        <button type="button" id="pdfZoomOut" class="btn btn-ghost" aria-label="Zoom out">&minus;</button>
+        <button type="button" id="pdfZoomIn" class="btn btn-ghost" aria-label="Zoom in">&plus;</button>
+      </div>
+      <div class="pdf-canvas-wrap">
+        <canvas id="pdfCanvas"></canvas>
+      </div>
+    </div>
+
+    <p class="hint">
+      Automatic riser detection from plan sets isn't reliable, so counts still need
+      to come from you or your tech reading the drawing. Upload the PDF here for a
+      side-by-side reference — or send it to me directly in chat and I'll read off
+      the riser/fitout counts for you to plug in below.
+    </p>
+  </section>
+
+  <!-- ESTIMATOR -->
+  <section class="panel estimator-panel" aria-labelledby="estimator-heading">
+    <h2 id="estimator-heading">Estimate</h2>
+
+    <fieldset class="group">
+      <legend>Risers</legend>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Count</span>
+          <input type="number" id="riserCount" min="0" step="1" value="0" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span class="field-label">Pace (per day)</span>
+          <input type="number" id="riserPace" min="0.1" step="0.1" value="3.5" inputmode="decimal" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Horizontal fitouts</legend>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Count</span>
+          <input type="number" id="fitoutCount" min="0" step="1" value="0" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span class="field-label">Pace (per day)</span>
+          <input type="number" id="fitoutPace" min="0.1" step="0.1" value="2" inputmode="decimal" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Complications</legend>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Extra days</span>
+          <input type="number" id="complicationDays" min="0" step="0.5" value="0" inputmode="decimal" />
+        </label>
+        <label class="field field-grow">
+          <span class="field-label">Note (optional)</span>
+          <input type="text" id="complicationNote" placeholder="flat oval / lined duct, tough access, etc." />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Day rate</legend>
+      <div class="rate-toggle" role="radiogroup" aria-label="Day rate">
+        <label class="rate-option">
+          <input type="radio" name="dayRate" value="standard" checked />
+          <span>Standard <strong>$3,500</strong></span>
+        </label>
+        <label class="rate-option">
+          <input type="radio" name="dayRate" value="prevailing" />
+          <span>Prevailing wage <strong>$4,500</strong></span>
+        </label>
+        <label class="rate-option">
+          <input type="radio" name="dayRate" value="custom" />
+          <span>Custom</span>
+        </label>
+      </div>
+      <label class="field" id="customRateField" hidden>
+        <span class="field-label">Custom day rate ($)</span>
+        <input type="number" id="customRateValue" min="0" step="50" value="3500" inputmode="decimal" />
+      </label>
+    </fieldset>
+
+    <div class="results" aria-live="polite">
+      <div class="stat-tiles">
+        <div class="stat-tile">
+          <span class="stat-label">Crew days</span>
+          <span class="stat-value" id="statDays">0</span>
+          <span class="stat-sub" id="statDaysRaw"></span>
+        </div>
+        <div class="stat-tile stat-tile-primary">
+          <span class="stat-label">Total price</span>
+          <span class="stat-value" id="statPrice">$0</span>
+        </div>
+      </div>
+
+      <div class="breakdown" id="breakdown">
+        <div class="breakdown-bar" id="breakdownBar"></div>
+        <ul class="breakdown-legend" id="breakdownLegend"></ul>
+      </div>
+    </div>
+
+    <div class="save-row">
+      <button type="button" class="btn btn-primary" id="saveJobBtn">Save this job</button>
+      <span id="saveStatus" class="save-status" role="status"></span>
+    </div>
+  </section>
+
+  <!-- SAVED JOBS -->
+  <section class="panel saved-panel" aria-labelledby="saved-heading">
+    <h2 id="saved-heading">Saved jobs</h2>
+    <p class="hint">Saved jobs live in this browser only — reload them as a starting template for similar buildings.</p>
+    <ul class="saved-list" id="savedList">
+      <li class="empty-state">No saved jobs yet.</li>
+    </ul>
+  </section>
+
+</main>
+
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
