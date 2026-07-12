@@ -53,6 +53,13 @@
       </div>
       <p class="hint hint-tight">Pick a category, then click on the drawing to drop a pin. Click a pin to remove it.</p>
 
+      <div class="ai-scan-row">
+        <input type="text" id="scanEndpoint" placeholder="Scan server URL, e.g. https://your-app.onrender.com/api/scan" />
+        <button type="button" class="btn btn-secondary btn-sm" id="scanAiBtn">Scan with AI (beta)</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="dismissSuggestionsBtn" hidden>Dismiss suggestions</button>
+      </div>
+      <p class="hint hint-tight" id="scanStatus"></p>
+
       <div class="pdf-canvas-wrap">
         <div class="pdf-page-stage" id="pdfPageStage">
           <canvas id="pdfCanvas"></canvas>

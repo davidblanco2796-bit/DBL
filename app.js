@@ -49,6 +49,10 @@
     useComplicationPinsBtn: document.getElementById("useComplicationPinsBtn"),
     smacnaPressureClass: document.getElementById("smacnaPressureClass"),
     smacnaOutput: document.getElementById("smacnaOutput"),
+    scanEndpoint: document.getElementById("scanEndpoint"),
+    scanAiBtn: document.getElementById("scanAiBtn"),
+    dismissSuggestionsBtn: document.getElementById("dismissSuggestionsBtn"),
+    scanStatus: document.getElementById("scanStatus"),
   };
 
   const currency = new Intl.NumberFormat("en-US", {
@@ -94,6 +98,7 @@
   };
 
   let pinsByPage = {}; // { [pageNumber]: [{ id, category, xPct, yPct }] }
+  let suggestedPinsByPage = {}; // same shape, from AI scan, not yet accepted
   let activeCategory = "riser";
   let lastPdfFileKey = null;
 
@@ -127,6 +132,7 @@
   function renderPinsOnPage() {
     els.pinLayer.innerHTML = "";
     const pins = pinsByPage[pdfPage] || [];
+    const suggestions = suggestedPinsByPage[pdfPage] || [];
     const seen = { riser: 0, trunk: 0, branch: 0, complication: 0 };
 
     pins.forEach((pin) => {
@@ -143,11 +149,33 @@
         e.stopPropagation();
         pinsByPage[pdfPage] = pinsByPage[pdfPage].filter((p) => p.id !== pin.id);
         renderPinsOnPage();
-        renderPinSync();
       });
       els.pinLayer.appendChild(marker);
     });
 
+    const seenSuggested = { riser: 0, trunk: 0, branch: 0, complication: 0 };
+    suggestions.forEach((pin) => {
+      seenSuggested[pin.category] += 1;
+      const meta = CATEGORY_META[pin.category];
+      const marker = document.createElement("div");
+      marker.className = "pin-marker suggested";
+      marker.dataset.category = pin.category;
+      marker.style.left = pin.xPct + "%";
+      marker.style.top = pin.yPct + "%";
+      const noteSuffix = pin.note ? ` (${pin.note})` : "";
+      marker.title = `AI suggestion: ${meta.label}${noteSuffix} — click to accept`;
+      marker.textContent = meta.code + "?";
+      marker.addEventListener("click", (e) => {
+        e.stopPropagation();
+        suggestedPinsByPage[pdfPage] = suggestedPinsByPage[pdfPage].filter((p) => p.id !== pin.id);
+        if (!pinsByPage[pdfPage]) pinsByPage[pdfPage] = [];
+        pinsByPage[pdfPage].push({ id: crypto.randomUUID(), category: pin.category, xPct: pin.xPct, yPct: pin.yPct });
+        renderPinsOnPage();
+      });
+      els.pinLayer.appendChild(marker);
+    });
+
+    els.dismissSuggestionsBtn.hidden = suggestions.length === 0;
     renderPinSync();
   }
 
@@ -194,6 +222,67 @@
     const perPin = Number(els.complicationDaysPerPin.value) || 0;
     els.complicationDays.value = (count * perPin).toFixed(2).replace(/\.?0+$/, "") || "0";
     recalc();
+  });
+
+  // ---- AI scan (beta) ----
+  const SCAN_ENDPOINT_KEY = "aeroseal_scan_endpoint";
+  els.scanEndpoint.value = localStorage.getItem(SCAN_ENDPOINT_KEY) || "";
+  els.scanEndpoint.addEventListener("change", () => {
+    localStorage.setItem(SCAN_ENDPOINT_KEY, els.scanEndpoint.value.trim());
+  });
+
+  els.dismissSuggestionsBtn.addEventListener("click", () => {
+    suggestedPinsByPage[pdfPage] = [];
+    renderPinsOnPage();
+    els.scanStatus.textContent = "";
+  });
+
+  els.scanAiBtn.addEventListener("click", async () => {
+    if (!pdfDoc) return;
+    const endpoint = els.scanEndpoint.value.trim();
+    if (!endpoint) {
+      els.scanStatus.textContent = "Enter your scan server URL first (see server/ in the repo for the beta backend to deploy).";
+      return;
+    }
+    localStorage.setItem(SCAN_ENDPOINT_KEY, endpoint);
+
+    els.scanAiBtn.disabled = true;
+    els.scanAiBtn.textContent = "Scanning…";
+    els.scanStatus.textContent = `Scanning page ${pdfPage}…`;
+
+    try {
+      const image = els.pdfCanvas.toDataURL("image/png");
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Server returned ${res.status}`);
+      }
+      const raw = Array.isArray(data.suggestions) ? data.suggestions : [];
+      const clean = raw
+        .filter((s) => Number.isFinite(s.xPct) && Number.isFinite(s.yPct))
+        .map((s) => ({
+          id: crypto.randomUUID(),
+          category: CATEGORY_META[s.category] ? s.category : "trunk",
+          xPct: Math.min(99, Math.max(1, s.xPct)),
+          yPct: Math.min(99, Math.max(1, s.yPct)),
+          note: typeof s.note === "string" ? s.note.slice(0, 80) : "",
+        }));
+
+      suggestedPinsByPage[pdfPage] = clean;
+      renderPinsOnPage();
+      els.scanStatus.textContent = clean.length
+        ? `${clean.length} AI suggestion(s) on this page — click one to accept, or Dismiss suggestions.`
+        : "No suggestions found on this page.";
+    } catch (err) {
+      els.scanStatus.textContent = `Scan failed: ${err.message}`;
+    } finally {
+      els.scanAiBtn.disabled = false;
+      els.scanAiBtn.textContent = "Scan with AI (beta)";
+    }
   });
 
   function getDayRate() {
@@ -401,6 +490,7 @@
     if (job.smacnaPressureClass) els.smacnaPressureClass.value = job.smacnaPressureClass;
     renderSmacna();
     pinsByPage = job.pinsByPage ? JSON.parse(JSON.stringify(job.pinsByPage)) : {};
+    suggestedPinsByPage = {};
     lastPdfFileKey = null;
     renderPinsOnPage();
     recalc();
@@ -457,6 +547,7 @@
     const fileKey = `${file.name}:${file.size}`;
     if (lastPdfFileKey !== null && fileKey !== lastPdfFileKey) {
       pinsByPage = {};
+      suggestedPinsByPage = {};
     }
     lastPdfFileKey = fileKey;
 

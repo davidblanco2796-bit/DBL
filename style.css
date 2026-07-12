@@ -586,6 +586,33 @@ input[type="number"]:focus {
 .pin-marker[data-category="branch"] { --pin-color: var(--series-branch); }
 .pin-marker[data-category="complication"] { --pin-color: var(--series-complications); }
 
+.pin-marker.suggested {
+  background: color-mix(in srgb, var(--pin-color) 55%, transparent);
+  border: 2px dashed var(--pin-color);
+  box-shadow: none;
+  color: var(--pin-color);
+}
+
+.pin-marker.suggested:hover {
+  background: var(--pin-color);
+  color: #ffffff;
+}
+
+.ai-scan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 10px 8px;
+}
+
+.ai-scan-row #scanEndpoint {
+  flex: 1;
+  min-width: 200px;
+  font-size: 0.8rem;
+  padding: 7px 9px;
+}
+
 .pin-sync {
   display: flex;
   align-items: center;
