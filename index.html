@@ -54,7 +54,7 @@
       <p class="hint hint-tight">Pick a category, then click on the drawing to drop a pin. Click a pin to remove it.</p>
 
       <div class="ai-scan-row">
-        <input type="text" id="scanEndpoint" placeholder="Scan server URL, e.g. https://your-app.onrender.com/api/scan" />
+        <input type="text" id="scanEndpoint" placeholder="AI server URL, e.g. https://your-app.onrender.com" />
         <button type="button" class="btn btn-secondary btn-sm" id="scanAiBtn">Scan with AI (beta)</button>
         <button type="button" class="btn btn-ghost btn-sm" id="dismissSuggestionsBtn" hidden>Dismiss suggestions</button>
       </div>
@@ -65,6 +65,17 @@
           <canvas id="pdfCanvas"></canvas>
           <div class="pin-layer" id="pinLayer"></div>
         </div>
+      </div>
+
+      <div class="ai-chat">
+        <h3 class="ai-chat-heading">Ask about this page <span class="legend-sub">(beta, uses the AI server URL above)</span></h3>
+        <div class="ai-chat-log" id="chatLog">
+          <p class="ai-chat-empty" id="chatEmpty">Questions here are answered about whichever page is currently shown above.</p>
+        </div>
+        <form class="ai-chat-form" id="chatForm">
+          <input type="text" id="chatInput" placeholder="e.g. how many risers are on this page?" autocomplete="off" />
+          <button type="submit" class="btn btn-secondary btn-sm" id="chatSendBtn">Send</button>
+        </form>
       </div>
     </div>
 

@@ -53,6 +53,11 @@
     scanAiBtn: document.getElementById("scanAiBtn"),
     dismissSuggestionsBtn: document.getElementById("dismissSuggestionsBtn"),
     scanStatus: document.getElementById("scanStatus"),
+    chatLog: document.getElementById("chatLog"),
+    chatEmpty: document.getElementById("chatEmpty"),
+    chatForm: document.getElementById("chatForm"),
+    chatInput: document.getElementById("chatInput"),
+    chatSendBtn: document.getElementById("chatSendBtn"),
   };
 
   const currency = new Intl.NumberFormat("en-US", {
@@ -224,12 +229,16 @@
     recalc();
   });
 
-  // ---- AI scan (beta) ----
+  // ---- AI scan + chat (beta) ----
   const SCAN_ENDPOINT_KEY = "aeroseal_scan_endpoint";
   els.scanEndpoint.value = localStorage.getItem(SCAN_ENDPOINT_KEY) || "";
   els.scanEndpoint.addEventListener("change", () => {
     localStorage.setItem(SCAN_ENDPOINT_KEY, els.scanEndpoint.value.trim());
   });
+
+  function getAiServerBase() {
+    return els.scanEndpoint.value.trim().replace(/\/+$/, "");
+  }
 
   els.dismissSuggestionsBtn.addEventListener("click", () => {
     suggestedPinsByPage[pdfPage] = [];
@@ -239,12 +248,12 @@
 
   els.scanAiBtn.addEventListener("click", async () => {
     if (!pdfDoc) return;
-    const endpoint = els.scanEndpoint.value.trim();
-    if (!endpoint) {
-      els.scanStatus.textContent = "Enter your scan server URL first (see server/ in the repo for the beta backend to deploy).";
+    const base = getAiServerBase();
+    if (!base) {
+      els.scanStatus.textContent = "Enter your AI server URL first (see server/ in the repo for the beta backend to deploy).";
       return;
     }
-    localStorage.setItem(SCAN_ENDPOINT_KEY, endpoint);
+    localStorage.setItem(SCAN_ENDPOINT_KEY, base);
 
     els.scanAiBtn.disabled = true;
     els.scanAiBtn.textContent = "Scanning…";
@@ -252,7 +261,7 @@
 
     try {
       const image = els.pdfCanvas.toDataURL("image/png");
-      const res = await fetch(endpoint, {
+      const res = await fetch(base + "/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image }),
@@ -282,6 +291,68 @@
     } finally {
       els.scanAiBtn.disabled = false;
       els.scanAiBtn.textContent = "Scan with AI (beta)";
+    }
+  });
+
+  // ---- Chat about this page (beta) ----
+  let chatHistory = []; // [{ role: 'user'|'assistant', content: string }]
+
+  function appendChatBubble(role, text) {
+    els.chatEmpty.hidden = true;
+    const bubble = document.createElement("div");
+    bubble.className = `chat-msg chat-msg-${role}`;
+    bubble.textContent = text;
+    els.chatLog.appendChild(bubble);
+    els.chatLog.scrollTop = els.chatLog.scrollHeight;
+    return bubble;
+  }
+
+  els.chatForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const question = els.chatInput.value.trim();
+    if (!question) return;
+
+    if (!pdfDoc) {
+      appendChatBubble("error", "Upload a plan PDF first — the chat answers about whichever page is on screen.");
+      return;
+    }
+    const base = getAiServerBase();
+    if (!base) {
+      appendChatBubble("error", "Enter your AI server URL first (see server/ in the repo for the beta backend to deploy).");
+      return;
+    }
+    localStorage.setItem(SCAN_ENDPOINT_KEY, base);
+
+    appendChatBubble("user", question);
+    chatHistory.push({ role: "user", content: question });
+    els.chatInput.value = "";
+    els.chatInput.disabled = true;
+    els.chatSendBtn.disabled = true;
+    const pending = appendChatBubble("pending", "Thinking…");
+
+    try {
+      const image = els.pdfCanvas.toDataURL("image/png");
+      const res = await fetch(base + "/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image, messages: chatHistory }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Server returned ${res.status}`);
+      }
+      const reply = typeof data.reply === "string" && data.reply ? data.reply : "(no reply)";
+      pending.remove();
+      appendChatBubble("assistant", reply);
+      chatHistory.push({ role: "assistant", content: reply });
+    } catch (err) {
+      pending.remove();
+      appendChatBubble("error", `Chat failed: ${err.message}`);
+      chatHistory.pop(); // drop the unanswered question so a retry doesn't duplicate it
+    } finally {
+      els.chatInput.disabled = false;
+      els.chatSendBtn.disabled = false;
+      els.chatInput.focus();
     }
   });
 
