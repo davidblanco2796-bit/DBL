@@ -494,24 +494,104 @@
 
   const DAY_RATE_LABELS = { standard: "Standard", prevailing: "Prevailing wage", custom: "Custom" };
 
-  function summarizeJobLines(job) {
+  // Splits the job's total price into billing line items, allocated by each
+  // category's share of raw crew days — the same math the breakdown bar
+  // uses — since the day-rate model has no real per-riser/per-run price to
+  // report. Amounts always sum back to the exact total price.
+  function jobLineItems(job) {
     const tally = job.pinTally || { riser: 0, trunk: 0, branch: 0, complication: 0 };
+    const rawDays = job.estimate.rawDays;
+    const totalPrice = job.estimate.totalPrice;
+    const allocate = (days) => (rawDays > 0 ? (days / rawDays) * totalPrice : 0);
+    const items = [];
+
+    if (job.riserCount > 0) {
+      const riserDays = job.riserPace > 0 ? job.riserCount / job.riserPace : 0;
+      const amount = allocate(riserDays);
+      items.push({
+        item: "Risers",
+        description: `${job.riserCount} riser${job.riserCount === 1 ? "" : "s"} @ ${job.riserPace}/day`,
+        qty: job.riserCount,
+        rate: amount / job.riserCount,
+        amount,
+      });
+    }
+
+    if (job.fitoutCount > 0) {
+      const fitoutDays = job.fitoutPace > 0 ? job.fitoutCount / job.fitoutPace : 0;
+      const fitoutAmount = allocate(fitoutDays);
+      const pinnedFitouts = tally.trunk + tally.branch;
+      if (pinnedFitouts > 0) {
+        if (tally.trunk > 0) {
+          const amount = fitoutAmount * (tally.trunk / pinnedFitouts);
+          items.push({
+            item: "Trunk duct",
+            description: `${tally.trunk} trunk run${tally.trunk === 1 ? "" : "s"} pinned on drawing`,
+            qty: tally.trunk,
+            rate: amount / tally.trunk,
+            amount,
+          });
+        }
+        if (tally.branch > 0) {
+          const amount = fitoutAmount * (tally.branch / pinnedFitouts);
+          items.push({
+            item: "Branch duct",
+            description: `${tally.branch} branch run${tally.branch === 1 ? "" : "s"} pinned on drawing`,
+            qty: tally.branch,
+            rate: amount / tally.branch,
+            amount,
+          });
+        }
+      } else {
+        items.push({
+          item: "Horizontal fitouts",
+          description: `${job.fitoutCount} @ ${job.fitoutPace}/day`,
+          qty: job.fitoutCount,
+          rate: fitoutAmount / job.fitoutCount,
+          amount: fitoutAmount,
+        });
+      }
+    }
+
+    if (job.complicationDays > 0) {
+      const amount = allocate(job.complicationDays);
+      items.push({
+        item: "Complications",
+        description: job.complicationNote || "Extra days (access, flat oval/lined duct, etc.)",
+        qty: job.complicationDays,
+        rate: amount / job.complicationDays,
+        amount,
+      });
+    }
+
+    if (items.length === 0) {
+      items.push({ item: "Aeroseal Duct Sealing", description: "", qty: 1, rate: totalPrice, amount: totalPrice });
+    }
+
+    return items;
+  }
+
+  function jobContextLines(job) {
     const smacna = SMACNA_TABLE[job.smacnaPressureClass];
     return [
-      `Job: ${job.jobName || "Untitled job"}`,
-      `Date: ${new Date(job.savedAt).toLocaleDateString()}`,
-      `Risers: ${job.riserCount} (pace ${job.riserPace}/day)${tally.riser ? `, ${tally.riser} pinned on drawing` : ""}`,
-      `Trunk runs pinned: ${tally.trunk}`,
-      `Branch runs pinned: ${tally.branch}`,
-      `Horizontal fitouts (trunk+branch): ${job.fitoutCount} (pace ${job.fitoutPace}/day)`,
-      `Complications: ${job.complicationDays} day(s)${job.complicationNote ? ` — ${job.complicationNote}` : ""}`,
       `Day rate: ${DAY_RATE_LABELS[job.dayRateMode] || job.dayRateMode} (${currency.format(job.dayRate)}/day)`,
       smacna
         ? `SMACNA: ${job.smacnaPressureClass}" wg — Seal Class ${smacna.sealClass}, target leakage class ${smacna.targetCL}`
         : null,
       `Crew days: ${job.estimate.billedDays} billed (${job.estimate.rawDays.toFixed(1)} raw)`,
-      `Total price: ${currency.format(job.estimate.totalPrice)}`,
     ].filter(Boolean);
+  }
+
+  function summarizeJobLines(job) {
+    return [
+      `Job: ${job.jobName || "Untitled job"}`,
+      `Date: ${new Date(job.savedAt).toLocaleDateString()}`,
+      ...jobLineItems(job).map(
+        (li) => `${li.item}: ${li.qty} — ${currency.format(li.rate)} ea — ${currency.format(li.amount)}${li.description ? ` (${li.description})` : ""}`
+      ),
+      ...jobContextLines(job),
+      `Total price: ${currency.format(job.estimate.totalPrice)}`,
+    ];
   }
 
   function csvEscape(value) {
@@ -519,17 +599,18 @@
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
 
-  function jobToCsvRow(job) {
-    const descriptionLines = summarizeJobLines(job).slice(2); // skip job/date, already their own columns
-    return [
-      job.jobName || "Untitled job",
-      new Date(job.savedAt).toISOString().slice(0, 10),
-      "Aeroseal Duct Sealing",
-      descriptionLines.join("; "),
-      "1",
-      job.estimate.totalPrice.toFixed(2),
-      job.estimate.totalPrice.toFixed(2),
-    ];
+  function jobToCsvRows(job) {
+    const customer = job.jobName || "Untitled job";
+    const date = new Date(job.savedAt).toISOString().slice(0, 10);
+    return jobLineItems(job).map((li) => [
+      customer,
+      date,
+      li.item,
+      li.description,
+      li.qty,
+      li.rate.toFixed(2),
+      li.amount.toFixed(2),
+    ]);
   }
 
   function downloadCsv(filename, rows) {
@@ -548,7 +629,7 @@
   els.exportAllBtn.addEventListener("click", () => {
     const jobs = loadJobs().sort((a, b) => b.savedAt - a.savedAt);
     if (jobs.length === 0) return;
-    downloadCsv("aeroseal-jobs.csv", [CSV_HEADER, ...jobs.map(jobToCsvRow)]);
+    downloadCsv("aeroseal-jobs.csv", [CSV_HEADER, ...jobs.flatMap(jobToCsvRows)]);
   });
 
   function renderSavedJobs() {
@@ -588,8 +669,39 @@
       const details = document.createElement("div");
       details.className = "saved-item-details";
       details.hidden = true;
-      summarizeJobLines(job).forEach((line) => {
+
+      function tableRow(tag, cells) {
+        const tr = document.createElement("tr");
+        cells.forEach(([text, colspan]) => {
+          const cell = document.createElement(tag);
+          cell.textContent = text;
+          if (colspan) cell.colSpan = colspan;
+          tr.appendChild(cell);
+        });
+        return tr;
+      }
+
+      const table = document.createElement("table");
+      table.className = "line-items-table";
+      const thead = document.createElement("thead");
+      thead.appendChild(tableRow("th", [["Item"], ["Qty"], ["Rate"], ["Amount"]]));
+      const tbody = document.createElement("tbody");
+      jobLineItems(job).forEach((li) => {
+        const label = li.description ? `${li.item} — ${li.description}` : li.item;
+        tbody.appendChild(
+          tableRow("td", [[label], [String(li.qty)], [currency.format(li.rate)], [currency.format(li.amount)]])
+        );
+      });
+      const tfoot = document.createElement("tfoot");
+      tfoot.appendChild(tableRow("td", [["Total", 3], [currency.format(job.estimate.totalPrice)]]));
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      table.appendChild(tfoot);
+      details.appendChild(table);
+
+      jobContextLines(job).forEach((line) => {
         const p = document.createElement("div");
+        p.className = "saved-item-context-line";
         p.textContent = line;
         details.appendChild(p);
       });
@@ -627,7 +739,7 @@
       csvBtn.textContent = "Export CSV";
       csvBtn.addEventListener("click", () => {
         const safeName = (job.jobName || "job").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-        downloadCsv(`aeroseal-${safeName}.csv`, [CSV_HEADER, jobToCsvRow(job)]);
+        downloadCsv(`aeroseal-${safeName}.csv`, [CSV_HEADER, ...jobToCsvRows(job)]);
       });
 
       const loadBtn = document.createElement("button");

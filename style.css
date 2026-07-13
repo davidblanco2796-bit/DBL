@@ -501,15 +501,51 @@ input[type="number"]:focus {
 
 .saved-item-details {
   margin-top: 8px;
-  padding: 8px 10px;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--page-plane);
   font-size: 0.8rem;
   color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+}
+
+.saved-item-context-line {
+  margin-top: 3px;
+}
+
+.line-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.line-items-table th,
+.line-items-table td {
+  text-align: left;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.line-items-table th:not(:first-child),
+.line-items-table td:not(:first-child) {
+  text-align: right;
+}
+
+.line-items-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.line-items-table tfoot td {
+  border-bottom: none;
+  border-top: 1px solid var(--baseline);
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-top: 7px;
 }
 
 .btn-sm {
