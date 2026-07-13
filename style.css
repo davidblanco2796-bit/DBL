@@ -448,7 +448,7 @@ input[type="number"]:focus {
 
 .saved-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -479,6 +479,37 @@ input[type="number"]:focus {
 .saved-item-actions .btn {
   padding: 6px 12px;
   font-size: 0.82rem;
+}
+
+.saved-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.saved-panel-header h2 {
+  margin: 0;
+}
+
+.saved-item-counts {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.saved-item-details {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page-plane);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .btn-sm {

@@ -25,6 +25,7 @@
     saveJobBtn: document.getElementById("saveJobBtn"),
     saveStatus: document.getElementById("saveStatus"),
     savedList: document.getElementById("savedList"),
+    exportAllBtn: document.getElementById("exportAllBtn"),
     pdfInput: document.getElementById("pdfInput"),
     pdfFileName: document.getElementById("pdfFileName"),
     pdfViewer: document.getElementById("pdfViewer"),
@@ -491,9 +492,69 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
   }
 
+  const DAY_RATE_LABELS = { standard: "Standard", prevailing: "Prevailing wage", custom: "Custom" };
+
+  function summarizeJobLines(job) {
+    const tally = job.pinTally || { riser: 0, trunk: 0, branch: 0, complication: 0 };
+    const smacna = SMACNA_TABLE[job.smacnaPressureClass];
+    return [
+      `Job: ${job.jobName || "Untitled job"}`,
+      `Date: ${new Date(job.savedAt).toLocaleDateString()}`,
+      `Risers: ${job.riserCount} (pace ${job.riserPace}/day)${tally.riser ? `, ${tally.riser} pinned on drawing` : ""}`,
+      `Trunk runs pinned: ${tally.trunk}`,
+      `Branch runs pinned: ${tally.branch}`,
+      `Horizontal fitouts (trunk+branch): ${job.fitoutCount} (pace ${job.fitoutPace}/day)`,
+      `Complications: ${job.complicationDays} day(s)${job.complicationNote ? ` — ${job.complicationNote}` : ""}`,
+      `Day rate: ${DAY_RATE_LABELS[job.dayRateMode] || job.dayRateMode} (${currency.format(job.dayRate)}/day)`,
+      smacna
+        ? `SMACNA: ${job.smacnaPressureClass}" wg — Seal Class ${smacna.sealClass}, target leakage class ${smacna.targetCL}`
+        : null,
+      `Crew days: ${job.estimate.billedDays} billed (${job.estimate.rawDays.toFixed(1)} raw)`,
+      `Total price: ${currency.format(job.estimate.totalPrice)}`,
+    ].filter(Boolean);
+  }
+
+  function csvEscape(value) {
+    const s = String(value ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function jobToCsvRow(job) {
+    const descriptionLines = summarizeJobLines(job).slice(2); // skip job/date, already their own columns
+    return [
+      job.jobName || "Untitled job",
+      new Date(job.savedAt).toISOString().slice(0, 10),
+      "Aeroseal Duct Sealing",
+      descriptionLines.join("; "),
+      "1",
+      job.estimate.totalPrice.toFixed(2),
+      job.estimate.totalPrice.toFixed(2),
+    ];
+  }
+
+  function downloadCsv(filename, rows) {
+    const content = rows.map((row) => row.map(csvEscape).join(",")).join("\r\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const CSV_HEADER = ["Customer", "Date", "Item", "Description", "Qty", "Rate", "Amount"];
+
+  els.exportAllBtn.addEventListener("click", () => {
+    const jobs = loadJobs().sort((a, b) => b.savedAt - a.savedAt);
+    if (jobs.length === 0) return;
+    downloadCsv("aeroseal-jobs.csv", [CSV_HEADER, ...jobs.map(jobToCsvRow)]);
+  });
+
   function renderSavedJobs() {
     const jobs = loadJobs().sort((a, b) => b.savedAt - a.savedAt);
     els.savedList.innerHTML = "";
+    els.exportAllBtn.hidden = jobs.length === 0;
 
     if (jobs.length === 0) {
       const li = document.createElement("li");
@@ -504,6 +565,7 @@
     }
 
     jobs.forEach((job) => {
+      const tally = job.pinTally || { riser: 0, trunk: 0, branch: 0, complication: 0 };
       const li = document.createElement("li");
       li.className = "saved-item";
 
@@ -516,11 +578,57 @@
       meta.className = "saved-item-meta";
       const date = new Date(job.savedAt).toLocaleDateString();
       meta.textContent = `${date} · ${job.estimate.billedDays.toFixed(0)}d · ${currency.format(job.estimate.totalPrice)}`;
+      const counts = document.createElement("div");
+      counts.className = "saved-item-counts";
+      counts.textContent = `Risers ${job.riserCount} · Trunk ${tally.trunk} · Branch ${tally.branch} · Fitouts ${job.fitoutCount}`;
       info.appendChild(name);
       info.appendChild(meta);
+      info.appendChild(counts);
+
+      const details = document.createElement("div");
+      details.className = "saved-item-details";
+      details.hidden = true;
+      summarizeJobLines(job).forEach((line) => {
+        const p = document.createElement("div");
+        p.textContent = line;
+        details.appendChild(p);
+      });
+      info.appendChild(details);
 
       const actions = document.createElement("div");
       actions.className = "saved-item-actions";
+
+      const detailsBtn = document.createElement("button");
+      detailsBtn.type = "button";
+      detailsBtn.className = "btn btn-ghost";
+      detailsBtn.textContent = "Details";
+      detailsBtn.addEventListener("click", () => {
+        details.hidden = !details.hidden;
+        detailsBtn.textContent = details.hidden ? "Details" : "Hide details";
+      });
+
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "btn btn-ghost";
+      copyBtn.textContent = "Copy summary";
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(summarizeJobLines(job).join("\n"));
+          copyBtn.textContent = "Copied!";
+        } catch {
+          copyBtn.textContent = "Copy failed";
+        }
+        setTimeout(() => (copyBtn.textContent = "Copy summary"), 1500);
+      });
+
+      const csvBtn = document.createElement("button");
+      csvBtn.type = "button";
+      csvBtn.className = "btn btn-secondary";
+      csvBtn.textContent = "Export CSV";
+      csvBtn.addEventListener("click", () => {
+        const safeName = (job.jobName || "job").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+        downloadCsv(`aeroseal-${safeName}.csv`, [CSV_HEADER, jobToCsvRow(job)]);
+      });
 
       const loadBtn = document.createElement("button");
       loadBtn.type = "button";
@@ -537,6 +645,9 @@
         renderSavedJobs();
       });
 
+      actions.appendChild(detailsBtn);
+      actions.appendChild(copyBtn);
+      actions.appendChild(csvBtn);
       actions.appendChild(loadBtn);
       actions.appendChild(deleteBtn);
 
@@ -583,6 +694,7 @@
       estimate,
       smacnaPressureClass: els.smacnaPressureClass.value,
       pinsByPage,
+      pinTally: pinTally(),
     };
     const jobs = loadJobs();
     jobs.push(job);

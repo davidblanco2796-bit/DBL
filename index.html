@@ -223,8 +223,15 @@
 
   <!-- SAVED JOBS -->
   <section class="panel saved-panel" aria-labelledby="saved-heading">
-    <h2 id="saved-heading">Saved jobs</h2>
-    <p class="hint">Saved jobs live in this browser only — reload them as a starting template for similar buildings.</p>
+    <div class="saved-panel-header">
+      <h2 id="saved-heading">Saved jobs</h2>
+      <button type="button" class="btn btn-secondary btn-sm" id="exportAllBtn" hidden>Export all (CSV)</button>
+    </div>
+    <p class="hint">
+      Saved jobs live in this browser only — reload them as a starting template for similar buildings.
+      "Export CSV" / "Export all" download a QuickBooks-importable CSV (Customer, Date, Item, Description,
+      Qty, Rate, Amount) with the full job breakdown in the description field.
+    </p>
     <ul class="saved-list" id="savedList">
       <li class="empty-state">No saved jobs yet.</li>
     </ul>
